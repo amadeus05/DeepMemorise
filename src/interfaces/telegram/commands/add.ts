@@ -155,18 +155,20 @@ async function finishAdd(
 ): Promise<void> {
   try {
     const word = await services.words.addWord(userId, { ...input, source: "manual" });
+    const total = await services.words.countWords(userId);
     ctx.session.add = { step: "idle" };
-    await ctx.reply(
-      [
-        "✅ <b>Добавлено</b>",
-        "",
-        `<b>${escapeHtml(word.term)}</b> — ${escapeHtml(word.translation)}`,
-        word.example ? `<i>${escapeHtml(word.example)}</i>` : null,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-      { parse_mode: HTML, reply_markup: addedKeyboard() },
-    );
+
+    const lines = [
+      "✅ <b>Слово добавлено в словарь</b>",
+      "",
+      `📕 <b>${escapeHtml(word.term)}</b> — <i>${escapeHtml(word.translation)}</i>`,
+    ];
+    if (word.example) {
+      lines.push(`💬 <i>${escapeHtml(word.example)}</i>`);
+    }
+    lines.push("", `<i>Теперь в словаре: ${total}</i>`);
+
+    await ctx.reply(lines.join("\n"), { parse_mode: HTML, reply_markup: addedKeyboard() });
   } catch (error) {
     ctx.session.add = { step: "idle" };
     await ctx.reply(formatAppError(error));
