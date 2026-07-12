@@ -3,7 +3,6 @@ import { Methodology, methodologyLabel } from "../../../domain/enums/Methodology
 import type { UserSettings } from "../../../domain/entities/UserSettings.js";
 import {
   QUIET_HOURS_PRESETS,
-  REMIND_TIME_PRESETS,
   TIMEZONE_REGIONS,
 } from "../../../application/SettingsService.js";
 
@@ -19,40 +18,15 @@ export function settingsKeyboard(settings: UserSettings): InlineKeyboard {
     )
     .row()
     .text(
-      settings.remindersEnabled ? "🔔 Дневное: вкл" : "🔔 Дневное: выкл",
-      "set:remind:toggle",
-    )
-    .row()
-    .text(
-      settings.shortRemindersEnabled ? "⚡ Короткие: вкл" : "⚡ Короткие: выкл",
+      settings.shortRemindersEnabled ? "🔔 Напоминания: вкл" : "🔔 Напоминания: выкл",
       "set:remind:short",
     );
 
-  if (settings.remindersEnabled) {
-    keyboard.row().text("🕒 Время дня", "set:remind:times");
-  }
-
   if (settings.shortRemindersEnabled) {
-    keyboard.row().text("🌙 Тихие часы", "set:remind:quiet");
-  }
-
-  if (settings.remindersEnabled || settings.shortRemindersEnabled) {
+    keyboard.row().text("🌙 Не беспокоить", "set:remind:quiet");
     keyboard.row().text("🌍 Часовой пояс", "set:remind:zones");
   }
 
-  return keyboard;
-}
-
-export function remindTimesKeyboard(current: string): InlineKeyboard {
-  const keyboard = new InlineKeyboard();
-  for (const [index, time] of REMIND_TIME_PRESETS.entries()) {
-    const label = current === time ? `✅ ${time}` : time;
-    keyboard.text(label, `set:remind:at:${time}`);
-    if (index % 3 === 2) {
-      keyboard.row();
-    }
-  }
-  keyboard.row().text("← Назад", "set:back");
   return keyboard;
 }
 
@@ -103,11 +77,6 @@ export function remindZonesKeyboard(
 
 export function parseMethodologyCallback(data: string): string | null {
   const match = /^set:method:(sm2|ebbinghaus)$/.exec(data);
-  return match?.[1] ?? null;
-}
-
-export function parseRemindAtCallback(data: string): string | null {
-  const match = /^set:remind:at:(\d{2}:\d{2})$/.exec(data);
   return match?.[1] ?? null;
 }
 

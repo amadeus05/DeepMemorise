@@ -4,7 +4,7 @@ import { UserSettings } from "../domain/entities/UserSettings.js";
 import type { ISettingsRepository } from "../ports/ISettingsRepository.js";
 import type { SchedulerRegistry } from "./scheduling/SchedulerRegistry.js";
 import type { ISchedulerStrategy } from "./scheduling/ISchedulerStrategy.js";
-import { isValidRemindAt } from "./reminders/dailyReminderLogic.js";
+import { isValidRemindAt } from "./reminders/timeUtils.js";
 import { AppError } from "../shared/errors/AppError.js";
 import { escapeHtml } from "../shared/utils/telegramHtml.js";
 
@@ -126,7 +126,6 @@ function timezoneOffset(timezone: string): string {
   }
 }
 
-export const REMIND_TIME_PRESETS = ["09:00", "12:00", "15:00", "18:00", "20:00", "21:00"] as const;
 export const TIMEZONE_PRESETS = Object.keys(TIMEZONE_CITIES);
 
 export const QUIET_HOURS_PRESETS = [
@@ -161,20 +160,7 @@ export class SettingsService {
 
   public async setRemindersEnabled(userId: string, enabled: boolean): Promise<UserSettings> {
     await this.getOrCreate(userId);
-    return this.settings.updateReminders(userId, { remindersEnabled: enabled });
-  }
-
-  public async setShortRemindersEnabled(userId: string, enabled: boolean): Promise<UserSettings> {
-    await this.getOrCreate(userId);
     return this.settings.updateReminders(userId, { shortRemindersEnabled: enabled });
-  }
-
-  public async setRemindAt(userId: string, remindAt: string): Promise<UserSettings> {
-    if (!isValidRemindAt(remindAt)) {
-      throw new AppError("Время должно быть в формате HH:MM");
-    }
-    await this.getOrCreate(userId);
-    return this.settings.updateReminders(userId, { remindAt });
   }
 
   public async setTimezone(userId: string, timezone: string): Promise<UserSettings> {
@@ -197,16 +183,8 @@ export class SettingsService {
     return this.settings.updateReminders(userId, { quietHoursStart, quietHoursEnd });
   }
 
-  public async markDailyReminderSent(userId: string, localDate: string): Promise<void> {
-    await this.settings.updateReminders(userId, { lastDailyReminderOn: localDate });
-  }
-
   public async markShortReminderSent(userId: string, at: Date): Promise<void> {
     await this.settings.updateReminders(userId, { lastShortReminderAt: at });
-  }
-
-  public listReminderCandidates() {
-    return this.settings.listReminderCandidates();
   }
 
   public listShortReminderCandidates() {
@@ -219,23 +197,22 @@ export class SettingsService {
   }
 
   public formatSettings(settings: UserSettings): string {
-    const daily = settings.remindersEnabled
-      ? `вкл · ${escapeHtml(settings.remindAt)} · ${escapeHtml(this.timezoneLabel(settings.timezone))}`
-      : "выкл";
-
-    const short = settings.shortRemindersEnabled
-      ? `вкл · тихие ${escapeHtml(settings.quietHoursStart)}–${escapeHtml(settings.quietHoursEnd)}`
-      : "выкл";
-
-    return [
+    const lines = [
       "<b>⚙️ Настройки Deep Memorise</b>",
       "",
       `<b>Методика:</b> <i>${escapeHtml(methodologyLabel(settings.methodology))}</i>`,
-      `<b>Дневное напоминание:</b> <i>${daily}</i>`,
-      `<b>Короткие (Эббингауз):</b> <i>${short}</i>`,
-      "",
-      "<i>Пуши не двигают dueAt — только зовут в /train.</i>",
-    ].join("\n");
+      `<b>Напоминания:</b> <i>${settings.shortRemindersEnabled ? "вкл" : "выкл"}</i>`,
+    ];
+
+    if (settings.shortRemindersEnabled) {
+      lines.push(
+        `<b>Не беспокоить:</b> <i>${escapeHtml(settings.quietHoursStart)}–${escapeHtml(settings.quietHoursEnd)}</i>`,
+        `<b>Часовой пояс:</b> <i>${escapeHtml(this.timezoneLabel(settings.timezone))}</i>`,
+      );
+    }
+
+    lines.push("", "<i>Напоминания только зовут повторить — на график не влияют.</i>");
+    return lines.join("\n");
   }
 
   /** Полная подпись со смещением: «Киев (UTC+3)». */

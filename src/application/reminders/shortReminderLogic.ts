@@ -1,4 +1,4 @@
-import { compareHhMm, isValidRemindAt } from "./dailyReminderLogic.js";
+import { compareHhMm, isValidRemindAt } from "./timeUtils.js";
 import { Methodology } from "../../domain/enums/Methodology.js";
 
 export const SHORT_REMINDER_COOLDOWN_MS = 25 * 60_000; // SM-2: интервалы в днях

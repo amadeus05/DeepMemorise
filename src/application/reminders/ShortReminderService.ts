@@ -2,7 +2,7 @@ import type { Api } from "grammy";
 import type { IClock } from "../../ports/IClock.js";
 import type { SettingsService } from "../SettingsService.js";
 import type { ReviewService } from "../ReviewService.js";
-import { getZonedClock } from "./dailyReminderLogic.js";
+import { getZonedClock } from "./timeUtils.js";
 import { shouldSendShortReminder, shortReminderCooldownMs } from "./shortReminderLogic.js";
 import { trainCtaKeyboard } from "../../infrastructure/telegram/keyboards/reviewKeyboard.js";
 

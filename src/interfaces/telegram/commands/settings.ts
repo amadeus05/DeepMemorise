@@ -6,11 +6,9 @@ import {
   parseMethodologyCallback,
   parseQuietHoursCallback,
   parseRegionCallback,
-  parseRemindAtCallback,
   parseRemindTimezoneCallback,
   quietHoursKeyboard,
   remindRegionsKeyboard,
-  remindTimesKeyboard,
   remindZonesKeyboard,
   settingsKeyboard,
 } from "../../../infrastructure/telegram/keyboards/settingsKeyboard.js";
@@ -105,7 +103,7 @@ export function registerSettingsCommand(bot: Bot<BotContext>, services: AppServi
     }
   });
 
-  bot.callbackQuery("set:remind:toggle", async (ctx) => {
+  bot.callbackQuery("set:remind:short", async (ctx) => {
     const user = await ensureUser(ctx, services);
     if (!user) {
       await ctx.answerCallbackQuery();
@@ -116,32 +114,10 @@ export function registerSettingsCommand(bot: Bot<BotContext>, services: AppServi
       const current = await services.settings.getOrCreate(user.id);
       const settings = await services.settings.setRemindersEnabled(
         user.id,
-        !current.remindersEnabled,
-      );
-      await ctx.answerCallbackQuery({
-        text: settings.remindersEnabled ? "Дневные включены" : "Дневные выключены",
-      });
-      await renderSettings(ctx, settings, [], true);
-    } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
-    }
-  });
-
-  bot.callbackQuery("set:remind:short", async (ctx) => {
-    const user = await ensureUser(ctx, services);
-    if (!user) {
-      await ctx.answerCallbackQuery();
-      return;
-    }
-
-    try {
-      const current = await services.settings.getOrCreate(user.id);
-      const settings = await services.settings.setShortRemindersEnabled(
-        user.id,
         !current.shortRemindersEnabled,
       );
       await ctx.answerCallbackQuery({
-        text: settings.shortRemindersEnabled ? "Короткие включены" : "Короткие выключены",
+        text: settings.shortRemindersEnabled ? "Напоминания включены" : "Напоминания выключены",
       });
       await renderSettings(ctx, settings, [], true);
     } catch (error) {
@@ -161,8 +137,8 @@ export function registerSettingsCommand(bot: Bot<BotContext>, services: AppServi
       await ctx.answerCallbackQuery();
       await ctx.editMessageText(
         [
-          "<b>🌙 Тихие часы</b>",
-          "<i>В это время короткие пуши не приходят.</i>",
+          "<b>🌙 Не беспокоить</b>",
+          "<i>В это время напоминания не приходят.</i>",
         ].join("\n"),
         {
           parse_mode: HTML,
@@ -195,28 +171,6 @@ export function registerSettingsCommand(bot: Bot<BotContext>, services: AppServi
       );
       await ctx.answerCallbackQuery({ text: `Тихие: ${parsed.start}–${parsed.end}` });
       await renderSettings(ctx, settings, [], true);
-    } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
-    }
-  });
-
-  bot.callbackQuery("set:remind:times", async (ctx) => {
-    const user = await ensureUser(ctx, services);
-    if (!user) {
-      await ctx.answerCallbackQuery();
-      return;
-    }
-
-    try {
-      const settings = await services.settings.getOrCreate(user.id);
-      await ctx.answerCallbackQuery();
-      await ctx.editMessageText(
-        "<b>🕒 Время дневного напоминания</b>\n<i>По локальному часовому поясу</i>",
-        {
-          parse_mode: HTML,
-          reply_markup: remindTimesKeyboard(settings.remindAt),
-        },
-      );
     } catch (error) {
       await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
     }
@@ -269,28 +223,6 @@ export function registerSettingsCommand(bot: Bot<BotContext>, services: AppServi
           ),
         },
       );
-    } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
-    }
-  });
-
-  bot.callbackQuery(/^set:remind:at:/, async (ctx) => {
-    const time = parseRemindAtCallback(ctx.callbackQuery.data);
-    if (!time) {
-      await ctx.answerCallbackQuery();
-      return;
-    }
-
-    const user = await ensureUser(ctx, services);
-    if (!user) {
-      await ctx.answerCallbackQuery();
-      return;
-    }
-
-    try {
-      const settings = await services.settings.setRemindAt(user.id, time);
-      await ctx.answerCallbackQuery({ text: `Время: ${time}` });
-      await renderSettings(ctx, settings, [], true);
     } catch (error) {
       await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
     }

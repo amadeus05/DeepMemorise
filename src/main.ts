@@ -13,7 +13,6 @@ import { SettingsService } from "./application/SettingsService.js";
 import { UploadService } from "./application/UploadService.js";
 import { WordService } from "./application/WordService.js";
 import { ReviewService } from "./application/ReviewService.js";
-import { DailyReminderService } from "./application/reminders/DailyReminderService.js";
 import { ShortReminderService } from "./application/reminders/ShortReminderService.js";
 import { startReminderWorker } from "./infrastructure/reminders/reminderWorker.js";
 import { createBot } from "./infrastructure/telegram/bot.js";
@@ -79,9 +78,8 @@ async function bootstrap(): Promise<void> {
     uploads,
   });
 
-  const dailyReminders = new DailyReminderService(settings, reviews, clock, bot.api);
   const shortReminders = new ShortReminderService(settings, reviews, clock, bot.api);
-  const reminderTimer = startReminderWorker(dailyReminders, shortReminders);
+  const reminderTimer = startReminderWorker(shortReminders);
 
   const shutdown = (signal: string) => {
     console.log(`${signal} received, shutting down...`);

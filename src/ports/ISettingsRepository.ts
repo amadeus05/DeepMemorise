@@ -21,6 +21,5 @@ export interface ISettingsRepository {
   getByUserId(userId: string): Promise<UserSettings | null>;
   upsertMethodology(userId: string, methodology: Methodology): Promise<UserSettings>;
   updateReminders(userId: string, input: UpdateReminderSettingsInput): Promise<UserSettings>;
-  listReminderCandidates(): Promise<ReminderCandidate[]>;
   listShortReminderCandidates(): Promise<ReminderCandidate[]>;
 }

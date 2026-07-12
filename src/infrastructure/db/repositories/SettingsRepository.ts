@@ -110,22 +110,6 @@ export class SettingsRepository implements ISettingsRepository {
     return this.map(row);
   }
 
-  public async listReminderCandidates(): Promise<ReminderCandidate[]> {
-    const rows = await this.db
-      .select({
-        settings: userSettings,
-        telegramId: users.telegramId,
-      })
-      .from(userSettings)
-      .innerJoin(users, eq(users.id, userSettings.userId))
-      .where(eq(userSettings.remindersEnabled, true));
-
-    return rows.map((row) => ({
-      settings: this.map(row.settings),
-      telegramId: row.telegramId,
-    }));
-  }
-
   public async listShortReminderCandidates(): Promise<ReminderCandidate[]> {
     const rows = await this.db
       .select({

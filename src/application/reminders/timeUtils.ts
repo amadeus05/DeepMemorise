@@ -38,20 +38,3 @@ export function isValidRemindAt(value: string): boolean {
 export function compareHhMm(a: string, b: string): number {
   return a.localeCompare(b);
 }
-
-/**
- * Дневной якорь: один раз в локальный день после наступления remindAt.
- * Не двигает dueAt — только решает, слать ли пуш.
- */
-export function shouldSendDailyReminder(input: {
-  now: Date;
-  timezone: string;
-  remindAt: string;
-  lastDailyReminderOn: string | null;
-}): boolean {
-  const zoned = getZonedClock(input.now, input.timezone);
-  if (input.lastDailyReminderOn === zoned.date) {
-    return false;
-  }
-  return compareHhMm(zoned.time, input.remindAt) >= 0;
-}
