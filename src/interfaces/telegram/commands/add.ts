@@ -1,6 +1,15 @@
 import type { Bot } from "grammy";
 import type { AppServices, BotContext } from "../../../infrastructure/telegram/context.js";
+import {
+  addedKeyboard,
+  skipExampleKeyboard,
+  ADD_MORE,
+  ADD_SKIP_EXAMPLE,
+} from "../../../infrastructure/telegram/keyboards/addKeyboard.js";
+import { escapeHtml } from "../../../shared/utils/telegramHtml.js";
 import { ensureUser, formatAppError } from "./start.js";
+
+const HTML = "HTML" as const;
 
 export function registerAddCommand(bot: Bot<BotContext>, services: AppServices): void {
   bot.command("add", async (ctx) => {
@@ -9,28 +18,15 @@ export function registerAddCommand(bot: Bot<BotContext>, services: AppServices):
       return;
     }
 
-    ctx.session.edit = { step: "idle" };
-    ctx.session.photo = { step: "idle" };
-
     const payload = ctx.match?.trim();
     if (payload) {
+      ctx.session.edit = { step: "idle" };
+      ctx.session.photo = { step: "idle" };
       await addFromOneLine(ctx, services, user.id, payload);
       return;
     }
 
-    ctx.session.add = { step: "await_term" };
-    await ctx.reply(
-      [
-        "Добавим слово по шагам.",
-        "Сначала пришли само слово (например: resilience).",
-        "",
-        "Или одной строкой:",
-        "`/add resilience | устойчивость | She showed great resilience.`",
-        "",
-        "/cancel — отмена",
-      ].join("\n"),
-      { parse_mode: "Markdown" },
-    );
+    await startAddFlow(ctx);
   });
 
   bot.command("cancel", async (ctx) => {
@@ -38,6 +34,37 @@ export function registerAddCommand(bot: Bot<BotContext>, services: AppServices):
     ctx.session.edit = { step: "idle" };
     ctx.session.photo = { step: "idle" };
     await ctx.reply("Ок, отменил.");
+  });
+
+  // «➕ Ещё слово» — начать добавление заново.
+  bot.callbackQuery(ADD_MORE, async (ctx) => {
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await startAddFlow(ctx);
+  });
+
+  // «⏭ Пропустить» на шаге примера — добавить без примера.
+  bot.callbackQuery(ADD_SKIP_EXAMPLE, async (ctx) => {
+    const state = ctx.session.add;
+    if (state.step !== "await_example") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+    await ctx.answerCallbackQuery();
+    await finishAdd(ctx, services, user.id, {
+      term: state.term,
+      translation: state.translation,
+      example: null,
+    });
   });
 
   bot.on("message:text", async (ctx, next) => {
@@ -81,38 +108,69 @@ export function registerAddCommand(bot: Bot<BotContext>, services: AppServices):
           translation,
         };
         await ctx.reply(
-          "Опционально: пример предложения.\nИли отправь `-`, чтобы пропустить.",
+          "Опционально: пришли пример предложения — или нажми «Пропустить».",
+          { reply_markup: skipExampleKeyboard() },
         );
         return;
       }
 
       if (step === "await_example") {
         const raw = ctx.message.text.trim();
-        const example = raw === "-" ? null : raw;
-        const word = await services.words.addWord(user.id, {
+        await finishAdd(ctx, services, user.id, {
           term: ctx.session.add.term,
           translation: ctx.session.add.translation,
-          example,
-          source: "manual",
+          example: raw === "-" ? null : raw,
         });
-        ctx.session.add = { step: "idle" };
-        await ctx.reply(
-          [
-            "Добавлено:",
-            `• ${word.term} — ${word.translation}`,
-            word.example ? `• Пример: ${word.example}` : null,
-            "",
-            "Можно /train или снова /add.",
-          ]
-            .filter(Boolean)
-            .join("\n"),
-        );
       }
     } catch (error) {
       ctx.session.add = { step: "idle" };
       await ctx.reply(formatAppError(error));
     }
   });
+}
+
+async function startAddFlow(ctx: BotContext): Promise<void> {
+  ctx.session.edit = { step: "idle" };
+  ctx.session.photo = { step: "idle" };
+  ctx.session.add = { step: "await_term" };
+  await ctx.reply(
+    [
+      "Добавим слово по шагам.",
+      "Сначала пришли само слово (например: resilience).",
+      "",
+      "Или одной строкой:",
+      "`/add resilience | устойчивость | She showed great resilience.`",
+      "",
+      "/cancel — отмена",
+    ].join("\n"),
+    { parse_mode: "Markdown" },
+  );
+}
+
+async function finishAdd(
+  ctx: BotContext,
+  services: AppServices,
+  userId: string,
+  input: { term: string; translation: string; example: string | null },
+): Promise<void> {
+  try {
+    const word = await services.words.addWord(userId, { ...input, source: "manual" });
+    ctx.session.add = { step: "idle" };
+    await ctx.reply(
+      [
+        "✅ <b>Добавлено</b>",
+        "",
+        `<b>${escapeHtml(word.term)}</b> — ${escapeHtml(word.translation)}`,
+        word.example ? `<i>${escapeHtml(word.example)}</i>` : null,
+      ]
+        .filter(Boolean)
+        .join("\n"),
+      { parse_mode: HTML, reply_markup: addedKeyboard() },
+    );
+  } catch (error) {
+    ctx.session.add = { step: "idle" };
+    await ctx.reply(formatAppError(error));
+  }
 }
 
 async function addFromOneLine(
@@ -131,16 +189,5 @@ async function addFromOneLine(
     return;
   }
 
-  try {
-    const word = await services.words.addWord(userId, {
-      term,
-      translation,
-      example,
-      source: "manual",
-    });
-    ctx.session.add = { step: "idle" };
-    await ctx.reply(`Добавлено: ${word.term} — ${word.translation}`);
-  } catch (error) {
-    await ctx.reply(formatAppError(error));
-  }
+  await finishAdd(ctx, services, userId, { term, translation, example });
 }
