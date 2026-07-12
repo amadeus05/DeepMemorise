@@ -1,6 +1,16 @@
 import { compareHhMm, isValidRemindAt } from "./dailyReminderLogic.js";
+import { Methodology } from "../../domain/enums/Methodology.js";
 
-export const SHORT_REMINDER_COOLDOWN_MS = 25 * 60_000;
+export const SHORT_REMINDER_COOLDOWN_MS = 25 * 60_000; // SM-2: интервалы в днях
+export const SHORT_REMINDER_COOLDOWN_FAST_MS = 10 * 60_000; // Эббингауз: шаги 10–30 мин
+
+// У Эббингауза ранние шаги короткие (10–30 мин), поэтому и пуши уместны чаще.
+// У SM-2 всё в днях — там 25 мин анти-спама достаточно.
+export function shortReminderCooldownMs(methodology: Methodology): number {
+  return methodology === Methodology.Ebbinghaus
+    ? SHORT_REMINDER_COOLDOWN_FAST_MS
+    : SHORT_REMINDER_COOLDOWN_MS;
+}
 
 /**
  * Тихие часы. Поддержка перехода через полночь (23:00–08:00).
