@@ -75,6 +75,7 @@ export function registerImportCommand(
       return;
     }
 
+    const startedAt = Date.now();
     try {
       const file = await ctx.api.getFile(doc.file_id);
       if (!file.file_path) {
@@ -82,13 +83,25 @@ export function registerImportCommand(
       }
 
       const url = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+      const downloadStart = Date.now();
       const response = await fetch(url);
       if (!response.ok) {
         throw new Error(`File download failed with status ${response.status}`);
       }
       const buffer = Buffer.from(await response.arrayBuffer());
+      const downloadMs = Date.now() - downloadStart;
 
+      const dbStart = Date.now();
       const summary = await services.bulkImport.importFromFile(user.id, fileName, buffer);
+      const dbMs = Date.now() - dbStart;
+
+      const total = summary.added.length + summary.duplicates.length + summary.invalid.length;
+      console.log(
+        `Import: ${total} rows, ${summary.added.length} added — ` +
+          `download ${downloadMs}ms, db ${dbMs}ms (${Math.round(dbMs / Math.max(1, total))}ms/row), ` +
+          `total ${Date.now() - startedAt}ms`,
+      );
+
       await ctx.reply(formatImportSummary(summary), {
         parse_mode: HTML,
         ...(summary.added.length > 0 ? { reply_markup: importDoneKeyboard() } : {}),

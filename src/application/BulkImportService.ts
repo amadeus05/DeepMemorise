@@ -43,32 +43,34 @@ export class BulkImportService {
       throw new AppError(`Слишком много строк (максимум ${MAX_IMPORT_ROWS} за раз).`);
     }
 
+    const results = await this.words.addWordsBulk(
+      userId,
+      rows.map((row) => ({
+        term: row.term,
+        translation: row.translation,
+        example: row.example,
+        source: "import" as const,
+      })),
+    );
+
     const summary: ImportSummary = { added: [], duplicates: [], invalid: [] };
 
-    // Последовательно, а не Promise.all: строки нумеруем в порядке файла,
-    // не заливаем пул соединений одним залпом на большом файле.
-    for (const [index, row] of rows.entries()) {
-      try {
-        const word = await this.words.addWord(userId, {
-          term: row.term,
-          translation: row.translation,
-          example: row.example,
-          source: "import",
-        });
-        summary.added.push(word);
-      } catch (error) {
-        const issue: ImportRowIssue = {
-          row: index + 1,
-          term: row.term || "(пусто)",
-          reason: error instanceof AppError ? error.message : "Не удалось добавить.",
-        };
-        if (error instanceof AppError && error.message.includes("уже есть")) {
-          summary.duplicates.push(issue);
-        } else {
-          summary.invalid.push(issue);
-        }
+    results.forEach((result, index) => {
+      if (result.ok) {
+        summary.added.push(result.word);
+        return;
       }
-    }
+      const issue: ImportRowIssue = {
+        row: index + 1,
+        term: rows[index]?.term || "(пусто)",
+        reason: result.error.message,
+      };
+      if (result.error.message.includes("уже есть")) {
+        summary.duplicates.push(issue);
+      } else {
+        summary.invalid.push(issue);
+      }
+    });
 
     return summary;
   }

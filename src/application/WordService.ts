@@ -46,6 +46,57 @@ export class WordService {
     );
   }
 
+  /**
+   * Пакетное добавление для импорта. В отличие от addWord:
+   * — методика пользователя резолвится один раз на весь список, а не на
+   *   каждое слово (getSchedulerForUser — это отдельный DB round trip);
+   * — нет отдельного findByUserAndTerm pre-check: дубликат ловит уникальный
+   *   индекс внутри createWithCard и превращает в тот же AppError.
+   * На батч из N слов это ~2N round trip'ов вместо ~6N.
+   */
+  public async addWordsBulk(
+    userId: string,
+    inputs: AddWordInput[],
+  ): Promise<Array<{ ok: true; word: Word } | { ok: false; error: AppError }>> {
+    const scheduler = await this.settings.getSchedulerForUser(userId);
+    const results: Array<{ ok: true; word: Word } | { ok: false; error: AppError }> = [];
+
+    for (const input of inputs) {
+      const term = capitalizeFirst(input.term);
+      const translation = capitalizeFirst(input.translation);
+      const example = input.example?.trim() || null;
+
+      if (!term || !translation) {
+        results.push({ ok: false, error: new AppError("Укажи слово и перевод.") });
+        continue;
+      }
+
+      try {
+        const initial = scheduler.initialState(this.clock.now());
+        const word = await this.words.createWithCard(
+          userId,
+          { term, translation, example, source: input.source },
+          {
+            dueAt: initial.dueAt,
+            intervalMinutes: initial.intervalMinutes,
+            easeFactor: initial.easeFactor,
+            repetitions: initial.repetitions,
+            lapses: initial.lapses,
+          },
+        );
+        results.push({ ok: true, word });
+      } catch (error) {
+        if (error instanceof AppError) {
+          results.push({ ok: false, error });
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    return results;
+  }
+
   public async countWords(userId: string): Promise<number> {
     return this.words.countByUser(userId);
   }
