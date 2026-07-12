@@ -3,6 +3,8 @@ import type { AppServices, BotContext } from "../../../infrastructure/telegram/c
 import {
   addedKeyboard,
   skipExampleKeyboard,
+  startAddKeyboard,
+  ADD_CANCEL,
   ADD_MORE,
   ADD_SKIP_EXAMPLE,
 } from "../../../infrastructure/telegram/keyboards/addKeyboard.js";
@@ -33,6 +35,15 @@ export function registerAddCommand(bot: Bot<BotContext>, services: AppServices):
     ctx.session.add = { step: "idle" };
     ctx.session.edit = { step: "idle" };
     ctx.session.photo = { step: "idle" };
+    await ctx.reply("Ок, отменил.");
+  });
+
+  // «❌ Отмена» — то же самое, что /cancel, но кнопкой.
+  bot.callbackQuery(ADD_CANCEL, async (ctx) => {
+    ctx.session.add = { step: "idle" };
+    ctx.session.edit = { step: "idle" };
+    ctx.session.photo = { step: "idle" };
+    await ctx.answerCallbackQuery({ text: "Отменено" });
     await ctx.reply("Ок, отменил.");
   });
 
@@ -92,7 +103,9 @@ export function registerAddCommand(bot: Bot<BotContext>, services: AppServices):
           return;
         }
         ctx.session.add = { step: "await_translation", term };
-        await ctx.reply(`Слово: ${term}\nТеперь пришли перевод.`);
+        await ctx.reply(`Слово: ${term}\nТеперь пришли перевод.`, {
+          reply_markup: startAddKeyboard(),
+        });
         return;
       }
 
@@ -140,10 +153,8 @@ async function startAddFlow(ctx: BotContext): Promise<void> {
       "",
       "Или одной строкой:",
       "`/add resilience | устойчивость | She showed great resilience.`",
-      "",
-      "/cancel — отмена",
     ].join("\n"),
-    { parse_mode: "Markdown" },
+    { parse_mode: "Markdown", reply_markup: startAddKeyboard() },
   );
 }
 
