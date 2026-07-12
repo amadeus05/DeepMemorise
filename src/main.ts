@@ -13,6 +13,9 @@ import { SettingsService } from "./application/SettingsService.js";
 import { UploadService } from "./application/UploadService.js";
 import { WordService } from "./application/WordService.js";
 import { ReviewService } from "./application/ReviewService.js";
+import { BulkImportService } from "./application/BulkImportService.js";
+import { WordListParserRegistry } from "./application/import/WordListParserRegistry.js";
+import { CsvWordListParser } from "./infrastructure/import/CsvWordListParser.js";
 import { ShortReminderService } from "./application/reminders/ShortReminderService.js";
 import { startReminderWorker } from "./infrastructure/reminders/reminderWorker.js";
 import { createBot } from "./infrastructure/telegram/bot.js";
@@ -69,6 +72,9 @@ async function bootstrap(): Promise<void> {
   const uploads = new UploadService(uploadRepo);
   const words = new WordService(wordRepo, settings, uploads, clock);
   const reviews = new ReviewService(reviewRepo, settings, clock);
+  // Новый формат импорта = новая реализация IWordListParser в этом списке.
+  const wordListParsers = new WordListParserRegistry([new CsvWordListParser()]);
+  const bulkImport = new BulkImportService(wordListParsers, words);
 
   const bot = await createBot(env.telegramBotToken, {
     users,
@@ -76,6 +82,7 @@ async function bootstrap(): Promise<void> {
     reviews,
     settings,
     uploads,
+    bulkImport,
   });
 
   const shortReminders = new ShortReminderService(settings, reviews, clock, bot.api);

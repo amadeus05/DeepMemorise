@@ -4,6 +4,7 @@ import type { BotContext } from "./context.js";
 export const BOT_COMMANDS = [
   { command: "start", description: "Старт и статус" },
   { command: "add", description: "Добавить слово" },
+  { command: "import", description: "Импорт списка из CSV" },
   { command: "words", description: "Словарь" },
   { command: "train", description: "Тренировка" },
   { command: "settings", description: "Методика и настройки" },

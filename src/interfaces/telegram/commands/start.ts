@@ -32,6 +32,7 @@ export function registerStartCommand(bot: Bot<BotContext>, services: AppServices
         "",
         "Команды:",
         "/add — добавить слово",
+        "/import — импорт списка из CSV",
         "/words — словарь (просмотр / правка / удаление)",
         "/train — тренировка",
         "/settings — методика повторов",

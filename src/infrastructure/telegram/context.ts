@@ -3,6 +3,7 @@ import type { WordService } from "../../application/WordService.js";
 import type { ReviewService } from "../../application/ReviewService.js";
 import type { SettingsService } from "../../application/SettingsService.js";
 import type { UploadService } from "../../application/UploadService.js";
+import type { BulkImportService } from "../../application/BulkImportService.js";
 import type { IUserRepository } from "../../ports/IUserRepository.js";
 import type { EditField } from "./keyboards/wordsKeyboard.js";
 
@@ -25,10 +26,13 @@ export type PhotoWordSession =
   | { step: "idle" }
   | { step: "await_photo"; wordId: string; listPage: number };
 
+export type ImportSession = { step: "idle" } | { step: "await_file" };
+
 export type SessionData = {
   add: AddWordSession;
   edit: EditWordSession;
   photo: PhotoWordSession;
+  import: ImportSession;
   wordsPage: number;
 };
 
@@ -40,6 +44,7 @@ export type AppServices = {
   reviews: ReviewService;
   settings: SettingsService;
   uploads: UploadService;
+  bulkImport: BulkImportService;
 };
 
 export function initialSession(): SessionData {
@@ -47,6 +52,7 @@ export function initialSession(): SessionData {
     add: { step: "idle" },
     edit: { step: "idle" },
     photo: { step: "idle" },
+    import: { step: "idle" },
     wordsPage: 1,
   };
 }
