@@ -1,0 +1,20 @@
+# Пересобирается внутри образа — не тащим с хоста.
+node_modules
+dist
+
+# Секреты и мусор.
+.env
+*.log
+.DS_Store
+
+# Не нужно для сборки/рантайма.
+.git
+.gitignore
+.vscode
+.idea
+scripts
+README.md
+BACKLOG.md
+drizzle.config.ts
+
+# ВАЖНО: certs/ НЕ игнорируем — ca.pem нужен образу для TLS к Aiven.
