@@ -1,0 +1,52 @@
+import type { Context, SessionFlavor } from "grammy";
+import type { WordService } from "../../application/WordService.js";
+import type { ReviewService } from "../../application/ReviewService.js";
+import type { SettingsService } from "../../application/SettingsService.js";
+import type { UploadService } from "../../application/UploadService.js";
+import type { IUserRepository } from "../../ports/IUserRepository.js";
+import type { EditField } from "./keyboards/wordsKeyboard.js";
+
+export type AddWordSession =
+  | { step: "idle" }
+  | { step: "await_term" }
+  | { step: "await_translation"; term: string }
+  | { step: "await_example"; term: string; translation: string };
+
+export type EditWordSession =
+  | { step: "idle" }
+  | {
+      step: "await_value";
+      wordId: string;
+      field: EditField;
+      listPage: number;
+    };
+
+export type PhotoWordSession =
+  | { step: "idle" }
+  | { step: "await_photo"; wordId: string; listPage: number };
+
+export type SessionData = {
+  add: AddWordSession;
+  edit: EditWordSession;
+  photo: PhotoWordSession;
+  wordsPage: number;
+};
+
+export type BotContext = Context & SessionFlavor<SessionData>;
+
+export type AppServices = {
+  users: IUserRepository;
+  words: WordService;
+  reviews: ReviewService;
+  settings: SettingsService;
+  uploads: UploadService;
+};
+
+export function initialSession(): SessionData {
+  return {
+    add: { step: "idle" },
+    edit: { step: "idle" },
+    photo: { step: "idle" },
+    wordsPage: 1,
+  };
+}
