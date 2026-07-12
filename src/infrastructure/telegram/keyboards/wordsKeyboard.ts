@@ -29,9 +29,50 @@ export function wordsListKeyboard(page: WordPage): InlineKeyboard {
   keyboard
     .text(page.page <= 1 ? "·" : "←", page.page <= 1 ? "w:noop" : `w:p:${prevPage}`)
     .text(`${page.page}/${page.totalPages}`, "w:noop")
-    .text(page.page >= page.totalPages ? "·" : "→", page.page >= page.totalPages ? "w:noop" : `w:p:${nextPage}`);
+    .text(page.page >= page.totalPages ? "·" : "→", page.page >= page.totalPages ? "w:noop" : `w:p:${nextPage}`)
+    .row()
+    .text("🗑 Выбрать для удаления", "w:bulk:on");
 
   return keyboard;
+}
+
+// Список в режиме массового выбора: тап по слову ставит/снимает галочку
+// вместо открытия карточки. Пагинация (w:p:) общая с обычным режимом —
+// showList сам решает, какую клавиатуру рисовать, по session.bulkDelete.
+export function wordsSelectKeyboard(page: WordPage, selected: ReadonlySet<string>): InlineKeyboard {
+  const keyboard = new InlineKeyboard();
+  const from = (page.page - 1) * page.pageSize + 1;
+
+  for (const [index, word] of page.items.entries()) {
+    const number = from + index;
+    const mark = selected.has(word.id) ? "✅" : "⬜";
+    const label = truncate(
+      `${mark} ${number}. ${capitalizeFirst(word.term)} — ${capitalizeFirst(word.translation)}`,
+      64,
+    );
+    keyboard.text(label, `w:bulk:t:${word.id}`).row();
+  }
+
+  const prevPage = Math.max(1, page.page - 1);
+  const nextPage = Math.min(page.totalPages, page.page + 1);
+
+  keyboard
+    .text(page.page <= 1 ? "·" : "←", page.page <= 1 ? "w:noop" : `w:p:${prevPage}`)
+    .text(`${page.page}/${page.totalPages}`, "w:noop")
+    .text(page.page >= page.totalPages ? "·" : "→", page.page >= page.totalPages ? "w:noop" : `w:p:${nextPage}`)
+    .row();
+
+  if (selected.size > 0) {
+    keyboard.text(`🗑 Удалить (${selected.size})`, "w:bulk:go").row();
+  }
+
+  return keyboard.text("✖️ Отмена", "w:bulk:off");
+}
+
+export function bulkDeleteConfirmKeyboard(count: number): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(`Да, удалить ${count}`, "w:bulk:ok")
+    .text("← Назад", "w:bulk:back");
 }
 
 export function wordDetailKeyboard(
@@ -110,6 +151,37 @@ export function formatWordDetail(word: Word, hasPhoto = false): string {
   ].join("\n");
 }
 
+export function formatWordsSelectPage(page: WordPage, selectedCount: number): string {
+  const from = (page.page - 1) * page.pageSize + 1;
+  const to = Math.min(page.page * page.pageSize, page.total);
+
+  return [
+    "<b>🗑 Режим выбора</b>",
+    "",
+    `Показано: <b>${from}–${to}</b> из <b>${page.total}</b>`,
+    `Отмечено: <b>${selectedCount}</b>`,
+    "<i>Тапай слова, чтобы отметить/снять отметку</i>",
+  ].join("\n");
+}
+
+const MAX_BULK_CONFIRM_LINES = 30;
+
+export function formatBulkDeleteConfirm(words: Word[]): string {
+  const lines = ["⚠️ <b>Удалить выбранные слова?</b>", ""];
+
+  for (const [index, word] of words.slice(0, MAX_BULK_CONFIRM_LINES).entries()) {
+    lines.push(
+      `${index + 1}. ${escapeHtml(capitalizeFirst(word.term))} — ${escapeHtml(capitalizeFirst(word.translation))}`,
+    );
+  }
+  if (words.length > MAX_BULK_CONFIRM_LINES) {
+    lines.push(`...и ещё ${words.length - MAX_BULK_CONFIRM_LINES}`);
+  }
+
+  lines.push("", `<i>Карточки и фото (${words.length}) исчезнут безвозвратно.</i>`);
+  return lines.join("\n");
+}
+
 export function formatDeleteConfirm(word: Word): string {
   return [
     "⚠️ <b>Удалить слово?</b>",
@@ -179,6 +251,11 @@ export function parseWordDeleteCallback(data: string): string | null {
 
 export function parseWordDeleteConfirmCallback(data: string): string | null {
   const match = /^w:delok:([0-9a-f-]{36})$/i.exec(data);
+  return match?.[1] ?? null;
+}
+
+export function parseBulkToggleCallback(data: string): string | null {
+  const match = /^w:bulk:t:([0-9a-f-]{36})$/i.exec(data);
   return match?.[1] ?? null;
 }
 

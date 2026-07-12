@@ -28,11 +28,16 @@ export type PhotoWordSession =
 
 export type ImportSession = { step: "idle" } | { step: "await_file" };
 
+export type BulkDeleteSession =
+  | { step: "idle" }
+  | { step: "selecting"; selected: string[] };
+
 export type SessionData = {
   add: AddWordSession;
   edit: EditWordSession;
   photo: PhotoWordSession;
   import: ImportSession;
+  bulkDelete: BulkDeleteSession;
   wordsPage: number;
 };
 
@@ -53,6 +58,7 @@ export function initialSession(): SessionData {
     edit: { step: "idle" },
     photo: { step: "idle" },
     import: { step: "idle" },
+    bulkDelete: { step: "idle" },
     wordsPage: 1,
   };
 }

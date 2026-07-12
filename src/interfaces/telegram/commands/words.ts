@@ -3,11 +3,15 @@ import { GrammyError } from "grammy";
 import type { AppServices, BotContext } from "../../../infrastructure/telegram/context.js";
 import type { Word } from "../../../domain/entities/Word.js";
 import {
+  bulkDeleteConfirmKeyboard,
   deleteConfirmKeyboard,
+  formatBulkDeleteConfirm,
   formatDeleteConfirm,
   formatWordDetail,
   formatWordsPage,
+  formatWordsSelectPage,
   getWordsPageSize,
+  parseBulkToggleCallback,
   parseWordDeleteCallback,
   parseWordDeleteConfirmCallback,
   parseWordEditCallback,
@@ -17,6 +21,7 @@ import {
   parseWordsPageCallback,
   wordDetailKeyboard,
   wordsListKeyboard,
+  wordsSelectKeyboard,
 } from "../../../infrastructure/telegram/keyboards/wordsKeyboard.js";
 import { escapeHtml } from "../../../shared/utils/telegramHtml.js";
 import { capitalizeFirst } from "../../../shared/utils/capitalizeFirst.js";
@@ -41,17 +46,32 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
     const result = await services.words.listWords(user.id, page, getWordsPageSize());
     ctx.session.wordsPage = result.page;
 
-    const text = formatWordsPage(result);
+    if (result.total === 0) {
+      // Пустой словарь — выходим из режима выбора, ему тут нечего показывать.
+      ctx.session.bulkDelete = { step: "idle" };
+    }
+
+    const bulk = ctx.session.bulkDelete;
+    let text: string;
+    let keyboard: ReturnType<typeof wordsListKeyboard> | undefined;
+
+    if (result.total === 0) {
+      text = formatWordsPage(result);
+      keyboard = undefined;
+    } else if (bulk.step === "selecting") {
+      text = formatWordsSelectPage(result, bulk.selected.length);
+      keyboard = wordsSelectKeyboard(result, new Set(bulk.selected));
+    } else {
+      text = formatWordsPage(result);
+      keyboard = wordsListKeyboard(result);
+    }
 
     if (editMessage && ctx.callbackQuery) {
       try {
-        if (result.total === 0) {
-          await ctx.editMessageText(text, { parse_mode: HTML });
+        if (keyboard) {
+          await ctx.editMessageText(text, { parse_mode: HTML, reply_markup: keyboard });
         } else {
-          await ctx.editMessageText(text, {
-            parse_mode: HTML,
-            reply_markup: wordsListKeyboard(result),
-          });
+          await ctx.editMessageText(text, { parse_mode: HTML });
         }
       } catch (error) {
         if (!isMessageNotModified(error)) {
@@ -61,13 +81,10 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
       return;
     }
 
-    if (result.total === 0) {
-      await ctx.reply(text, { parse_mode: HTML });
+    if (keyboard) {
+      await ctx.reply(text, { parse_mode: HTML, reply_markup: keyboard });
     } else {
-      await ctx.reply(text, {
-        parse_mode: HTML,
-        reply_markup: wordsListKeyboard(result),
-      });
+      await ctx.reply(text, { parse_mode: HTML });
     }
   };
 
@@ -104,6 +121,7 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
   bot.command(["words", "list"], async (ctx) => {
     ctx.session.edit = { step: "idle" };
     ctx.session.photo = { step: "idle" };
+    ctx.session.bulkDelete = { step: "idle" };
     await showList(ctx, 1, false);
   });
 
@@ -304,6 +322,129 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
       });
     } catch (error) {
       await ctx.answerCallbackQuery({ text: formatAppError(error) });
+    }
+  });
+
+  // --- Массовое удаление: включить режим выбора ---
+  bot.callbackQuery("w:bulk:on", async (ctx) => {
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    ctx.session.bulkDelete = { step: "selecting", selected: [] };
+    await ctx.answerCallbackQuery();
+    await showList(ctx, ctx.session.wordsPage, true);
+  });
+
+  // Выйти из режима выбора без удаления.
+  bot.callbackQuery("w:bulk:off", async (ctx) => {
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    ctx.session.bulkDelete = { step: "idle" };
+    await ctx.answerCallbackQuery();
+    await showList(ctx, ctx.session.wordsPage, true);
+  });
+
+  // Тап по слову в режиме выбора — поставить/снять галочку. Выбор хранится
+  // в сессии, а не привязан к странице, поэтому переключение страниц его не сбрасывает.
+  bot.callbackQuery(/^w:bulk:t:[0-9a-f-]{36}$/i, async (ctx) => {
+    const wordId = parseBulkToggleCallback(ctx.callbackQuery.data);
+    const state = ctx.session.bulkDelete;
+    if (!wordId || state.step !== "selecting") {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const selected = new Set(state.selected);
+    if (selected.has(wordId)) {
+      selected.delete(wordId);
+    } else {
+      selected.add(wordId);
+    }
+    ctx.session.bulkDelete = { step: "selecting", selected: [...selected] };
+
+    try {
+      await ctx.answerCallbackQuery();
+      await showList(ctx, ctx.session.wordsPage, true);
+    } catch (error) {
+      if (!isMessageNotModified(error)) {
+        await ctx.reply(formatAppError(error));
+      }
+    }
+  });
+
+  // «🗑 Удалить (N)» — экран подтверждения со всеми выбранными словами.
+  bot.callbackQuery("w:bulk:go", async (ctx) => {
+    const state = ctx.session.bulkDelete;
+    if (state.step !== "selecting" || state.selected.length === 0) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    try {
+      const words = await services.words.getWordsForUser(state.selected, user.id);
+      await ctx.answerCallbackQuery();
+      await ctx.editMessageText(formatBulkDeleteConfirm(words), {
+        parse_mode: HTML,
+        reply_markup: bulkDeleteConfirmKeyboard(words.length),
+      });
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
+    }
+  });
+
+  // Вернуться с экрана подтверждения к списку, сохранив выбор.
+  bot.callbackQuery("w:bulk:back", async (ctx) => {
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    await ctx.answerCallbackQuery();
+    await showList(ctx, ctx.session.wordsPage, true);
+  });
+
+  // Подтверждено — удаляем всё разом.
+  bot.callbackQuery("w:bulk:ok", async (ctx) => {
+    const state = ctx.session.bulkDelete;
+    if (state.step !== "selecting" || state.selected.length === 0) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    const user = await ensureUser(ctx, services);
+    if (!user) {
+      await ctx.answerCallbackQuery();
+      return;
+    }
+
+    try {
+      const deleted = await services.words.deleteWordsBulk(state.selected, user.id);
+      ctx.session.bulkDelete = { step: "idle" };
+      ctx.session.wordsPage = 1;
+      await ctx.answerCallbackQuery({ text: `Удалено: ${deleted}` });
+      await showList(ctx, 1, true);
+    } catch (error) {
+      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
     }
   });
 

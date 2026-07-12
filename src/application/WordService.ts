@@ -188,4 +188,24 @@ export class WordService {
     await this.words.delete(wordId);
     await this.uploads.removeAllFor("word", wordId);
   }
+
+  /** Для экрана подтверждения массового удаления. Чужие/несуществующие id молча отбрасываются. */
+  public async getWordsForUser(wordIds: string[], userId: string): Promise<Word[]> {
+    return this.words.findManyByIds(wordIds, userId);
+  }
+
+  /**
+   * Массовое удаление для режима выбора в /words. В отличие от deleteWord
+   * не бросает AppError на отсутствующий/чужой id (между выбором и
+   * подтверждением слово могло уже исчезнуть) — просто пропускает его.
+   * Возвращает, сколько реально удалено.
+   */
+  public async deleteWordsBulk(wordIds: string[], userId: string): Promise<number> {
+    const owned = await this.words.findManyByIds(wordIds, userId);
+    for (const word of owned) {
+      await this.words.delete(word.id);
+      await this.uploads.removeAllFor("word", word.id);
+    }
+    return owned.length;
+  }
 }

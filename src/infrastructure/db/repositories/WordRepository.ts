@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Database } from "../client.js";
 import { reviewCards, words } from "../schema.js";
 import { Word, type WordSource } from "../../../domain/entities/Word.js";
@@ -104,6 +104,17 @@ export class WordRepository implements IWordRepository {
       .limit(1);
 
     return row ? this.map(row) : null;
+  }
+
+  public async findManyByIds(wordIds: string[], userId: string): Promise<Word[]> {
+    if (wordIds.length === 0) {
+      return [];
+    }
+    const rows = await this.db
+      .select()
+      .from(words)
+      .where(and(eq(words.userId, userId), inArray(words.id, wordIds)));
+    return rows.map((row) => this.map(row));
   }
 
   public async countByUser(userId: string): Promise<number> {

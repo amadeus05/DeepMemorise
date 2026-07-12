@@ -29,6 +29,8 @@ export interface IWordRepository {
   createWithCard(userId: string, input: AddWordInput, card: NewReviewCardState): Promise<Word>;
   findById(wordId: string): Promise<Word | null>;
   findByUserAndTerm(userId: string, term: string): Promise<Word | null>;
+  /** Только слова, реально принадлежащие userId — остальные id молча отбрасываются. */
+  findManyByIds(wordIds: string[], userId: string): Promise<Word[]>;
   countByUser(userId: string): Promise<number>;
   listByUser(userId: string, page: number, pageSize: number): Promise<WordPage>;
   update(wordId: string, input: UpdateWordInput): Promise<Word>;
