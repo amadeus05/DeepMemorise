@@ -32,12 +32,23 @@ export type BulkDeleteSession =
   | { step: "idle" }
   | { step: "selecting"; selected: string[] };
 
+// Лёгкий кеш личности пользователя, чтобы не апсертить его в базу на каждый
+// клик. Хранятся только примитивы — переживает JSON-сериализацию, если сессию
+// когда-нибудь вынесут во внешнее хранилище.
+export type SessionUser = {
+  id: string;
+  telegramId: number;
+  username: string | null;
+  firstName: string | null;
+};
+
 export type SessionData = {
   add: AddWordSession;
   edit: EditWordSession;
   photo: PhotoWordSession;
   import: ImportSession;
   bulkDelete: BulkDeleteSession;
+  cachedUser?: SessionUser;
   wordsPage: number;
 };
 

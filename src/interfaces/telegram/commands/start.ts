@@ -1,20 +1,18 @@
 import type { Bot } from "grammy";
-import type { AppServices, BotContext } from "../../../infrastructure/telegram/context.js";
+import type {
+  AppServices,
+  BotContext,
+  SessionUser,
+} from "../../../infrastructure/telegram/context.js";
 import { methodologyLabel } from "../../../domain/enums/Methodology.js";
 import { AppError } from "../../../shared/errors/AppError.js";
 
 export function registerStartCommand(bot: Bot<BotContext>, services: AppServices): void {
   bot.command("start", async (ctx) => {
-    const from = ctx.from;
-    if (!from) {
+    const user = await ensureUser(ctx, services);
+    if (!user) {
       return;
     }
-
-    const user = await services.users.upsertFromTelegram({
-      telegramId: from.id,
-      username: from.username ?? null,
-      firstName: from.first_name ?? null,
-    });
 
     const [wordsCount, dueCount, settings] = await Promise.all([
       services.words.countWords(user.id),
@@ -59,18 +57,40 @@ export function registerStatsCommand(bot: Bot<BotContext>, services: AppServices
   });
 }
 
-export async function ensureUser(ctx: BotContext, services: AppServices) {
+export async function ensureUser(
+  ctx: BotContext,
+  services: AppServices,
+): Promise<SessionUser | null> {
   const from = ctx.from;
   if (!from) {
     await ctx.reply("Не удалось определить пользователя.");
     return null;
   }
 
-  return services.users.upsertFromTelegram({
-    telegramId: from.id,
-    username: from.username ?? null,
-    firstName: from.first_name ?? null,
-  });
+  const username = from.username ?? null;
+  const firstName = from.first_name ?? null;
+
+  // Кеш-хит: тот же пользователь, username/имя не менялись — в базу не ходим.
+  const cached = ctx.session.cachedUser;
+  if (
+    cached &&
+    cached.telegramId === from.id &&
+    cached.username === username &&
+    cached.firstName === firstName
+  ) {
+    return cached;
+  }
+
+  // Первый раз или сменился username — апсертим (создаст, если новый) и кешируем.
+  const user = await services.users.upsertFromTelegram({ telegramId: from.id, username, firstName });
+  const sessionUser: SessionUser = {
+    id: user.id,
+    telegramId: user.telegramId,
+    username: user.username,
+    firstName: user.firstName,
+  };
+  ctx.session.cachedUser = sessionUser;
+  return sessionUser;
 }
 
 export function formatAppError(error: unknown): string {
