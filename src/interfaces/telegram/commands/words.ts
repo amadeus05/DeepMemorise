@@ -174,25 +174,24 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
   });
 
   bot.callbackQuery(/^w:v:/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const wordId = parseWordViewCallback(ctx.callbackQuery.data);
     if (!wordId) {
-      await ctx.answerCallbackQuery({ text: "Не удалось открыть слово" });
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
       const word = await services.words.getWordForUser(wordId, user.id);
       const listPage = ctx.session.wordsPage || 1;
-      await ctx.answerCallbackQuery();
       await showWordCard(ctx, word, listPage, "edit");
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
+      await ctx.reply(formatAppError(error));
     }
   });
 
@@ -254,15 +253,15 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
   });
 
   bot.callbackQuery(/^w:e:/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const parsed = parseWordEditCallback(ctx.callbackQuery.data);
     if (!parsed) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
@@ -283,57 +282,54 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
         example: "Пришли новый пример.\nИли `-`, чтобы очистить.\n/cancel — отмена",
       } as const;
 
-      await ctx.answerCallbackQuery();
       await ctx.reply(prompts[parsed.field]);
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error) });
+      await ctx.reply(formatAppError(error));
     }
   });
 
   bot.callbackQuery(/^w:delok:/, async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const wordId = parseWordDeleteConfirmCallback(ctx.callbackQuery.data);
     if (!wordId) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
       await services.words.deleteWord(wordId, user.id);
-      await ctx.answerCallbackQuery({ text: "Удалено" });
       await showList(ctx, ctx.session.wordsPage, true);
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error) });
+      await ctx.reply(formatAppError(error));
     }
   });
 
   bot.callbackQuery(/^w:del:[0-9a-f-]+$/i, async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const wordId = parseWordDeleteCallback(ctx.callbackQuery.data);
     if (!wordId) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
       const word = await services.words.getWordForUser(wordId, user.id);
-      await ctx.answerCallbackQuery();
       await ctx.editMessageText(formatDeleteConfirm(word), {
         parse_mode: HTML,
         reply_markup: deleteConfirmKeyboard(word.id, ctx.session.wordsPage),
       });
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error) });
+      await ctx.reply(formatAppError(error));
     }
   });
 
@@ -406,27 +402,26 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
 
   // «🗑 Удалить (N)» — экран подтверждения со всеми выбранными словами.
   bot.callbackQuery("w:bulk:go", async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const state = ctx.session.bulkDelete;
     if (state.step !== "selecting" || state.selected.length === 0) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
       const words = await services.words.getWordsForUser(state.selected, user.id);
-      await ctx.answerCallbackQuery();
       await ctx.editMessageText(formatBulkDeleteConfirm(words), {
         parse_mode: HTML,
         reply_markup: bulkDeleteConfirmKeyboard(words.length),
       });
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
+      await ctx.reply(formatAppError(error));
     }
   });
 
@@ -444,26 +439,25 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
 
   // Подтверждено — удаляем всё разом.
   bot.callbackQuery("w:bulk:ok", async (ctx) => {
+    await ctx.answerCallbackQuery();
+
     const state = ctx.session.bulkDelete;
     if (state.step !== "selecting" || state.selected.length === 0) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
-      const deleted = await services.words.deleteWordsBulk(state.selected, user.id);
+      await services.words.deleteWordsBulk(state.selected, user.id);
       ctx.session.bulkDelete = { step: "idle" };
       ctx.session.wordsPage = 1;
-      await ctx.answerCallbackQuery({ text: `Удалено: ${deleted}` });
       await showList(ctx, 1, true);
     } catch (error) {
-      await ctx.answerCallbackQuery({ text: formatAppError(error).slice(0, 180) });
+      await ctx.reply(formatAppError(error));
     }
   });
 

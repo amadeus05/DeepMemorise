@@ -25,25 +25,25 @@ export function registerTrainCommand(bot: Bot<BotContext>, services: AppServices
 
   // Кнопка «🧠 Повторить сейчас» под напоминаниями — запускает то же, что /train.
   bot.callbackQuery(TRAIN_CTA, async (ctx) => {
+    await ctx.answerCallbackQuery();
     try {
-      await ctx.answerCallbackQuery();
       await startTraining(ctx, services);
     } catch (error) {
-      await ctx.answerCallbackQuery();
       await ctx.reply(formatAppError(error));
     }
   });
 
   bot.callbackQuery(/^reveal:/, async (ctx) => {
+    // Гасим крутилку сразу, до похода в БД — иначе кнопка «висит» всю дорогу.
+    await ctx.answerCallbackQuery();
+
     const cardId = parseRevealCallback(ctx.callbackQuery.data);
     if (!cardId) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
@@ -53,7 +53,6 @@ export function registerTrainCommand(bot: Bot<BotContext>, services: AppServices
         services.settings.getMethodology(user.id),
       ]);
       if (!current) {
-        await ctx.answerCallbackQuery({ text: "Карточка уже не актуальна" });
         await ctx.editMessageText(
           [
             "<b>⏳ Карточка устарела</b>",
@@ -65,33 +64,31 @@ export function registerTrainCommand(bot: Bot<BotContext>, services: AppServices
         return;
       }
 
-      await ctx.answerCallbackQuery();
       await ctx.editMessageText(formatReveal(current), {
         parse_mode: HTML,
         reply_markup: reviewKeyboard(current.card.id, methodology),
       });
     } catch (error) {
-      await ctx.answerCallbackQuery();
       await ctx.reply(formatAppError(error));
     }
   });
 
   bot.callbackQuery(/^review:/, async (ctx) => {
+    // Гасим крутилку сразу — grade() дальше делает несколько запросов к БД.
+    await ctx.answerCallbackQuery();
+
     const parsed = parseReviewCallback(ctx.callbackQuery.data);
     if (!parsed) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     const user = await ensureUser(ctx, services);
     if (!user) {
-      await ctx.answerCallbackQuery();
       return;
     }
 
     try {
       const result = await services.reviews.grade(parsed.cardId, user.id, parsed.grade);
-      await ctx.answerCallbackQuery({ text: "Записал" });
 
       if (!result.nextDue) {
         await ctx.editMessageText(
@@ -119,7 +116,6 @@ export function registerTrainCommand(bot: Bot<BotContext>, services: AppServices
         },
       );
     } catch (error) {
-      await ctx.answerCallbackQuery();
       await ctx.reply(formatAppError(error));
     }
   });
