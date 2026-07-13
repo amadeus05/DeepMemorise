@@ -5,7 +5,7 @@ import type { SettingsService } from "../../application/SettingsService.js";
 import type { UploadService } from "../../application/UploadService.js";
 import type { BulkImportService } from "../../application/BulkImportService.js";
 import type { IUserRepository } from "../../ports/IUserRepository.js";
-import type { EditField } from "./keyboards/wordsKeyboard.js";
+import type { EditField, WordsPageView } from "./keyboards/wordsKeyboard.js";
 
 export type AddWordSession =
   | { step: "idle" }
@@ -49,6 +49,9 @@ export type SessionData = {
   import: ImportSession;
   bulkDelete: BulkDeleteSession;
   cachedUser?: SessionUser;
+  // Последняя отрисованная страница словаря — чтобы перерисовывать галочки
+  // в режиме удаления без повторного запроса списка из БД.
+  pageCache?: WordsPageView;
   wordsPage: number;
 };
 

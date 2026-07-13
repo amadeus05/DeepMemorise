@@ -36,10 +36,21 @@ export function wordsListKeyboard(page: WordPage): InlineKeyboard {
   return keyboard;
 }
 
+// Минимальная проекция страницы для режима выбора — только то, что нужно
+// клавиатуре и подписи. Хранится в сессии (примитивы), чтобы перерисовывать
+// галочки без повторного запроса списка из БД.
+export type WordsPageView = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  items: Array<{ id: string; term: string; translation: string }>;
+};
+
 // Список в режиме массового выбора: тап по слову ставит/снимает галочку
 // вместо открытия карточки. Пагинация (w:p:) общая с обычным режимом —
 // showList сам решает, какую клавиатуру рисовать, по session.bulkDelete.
-export function wordsSelectKeyboard(page: WordPage, selected: ReadonlySet<string>): InlineKeyboard {
+export function wordsSelectKeyboard(page: WordsPageView, selected: ReadonlySet<string>): InlineKeyboard {
   const keyboard = new InlineKeyboard();
   const from = (page.page - 1) * page.pageSize + 1;
 
@@ -151,7 +162,7 @@ export function formatWordDetail(word: Word, hasPhoto = false): string {
   ].join("\n");
 }
 
-export function formatWordsSelectPage(page: WordPage, selectedCount: number): string {
+export function formatWordsSelectPage(page: WordsPageView, selectedCount: number): string {
   const from = (page.page - 1) * page.pageSize + 1;
   const to = Math.min(page.page * page.pageSize, page.total);
 

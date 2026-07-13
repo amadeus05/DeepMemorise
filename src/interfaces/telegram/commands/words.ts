@@ -25,6 +25,7 @@ import {
 } from "../../../infrastructure/telegram/keyboards/wordsKeyboard.js";
 import { escapeHtml } from "../../../shared/utils/telegramHtml.js";
 import { capitalizeFirst } from "../../../shared/utils/capitalizeFirst.js";
+import { SessionCache } from "../../../infrastructure/telegram/sessionCache.js";
 import { ensureUser, formatAppError } from "./start.js";
 
 const HTML = "HTML" as const;
@@ -46,9 +47,20 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
     const result = await services.words.listWords(user.id, page, getWordsPageSize());
     ctx.session.wordsPage = result.page;
 
+    const cache = new SessionCache(ctx.session);
     if (result.total === 0) {
       // Пустой словарь — выходим из режима выбора, ему тут нечего показывать.
       ctx.session.bulkDelete = { step: "idle" };
+      cache.clearPage();
+    } else {
+      // Кешируем страницу — toggle перерисует галочки отсюда, без запроса в БД.
+      cache.setPage({
+        page: result.page,
+        pageSize: result.pageSize,
+        total: result.total,
+        totalPages: result.totalPages,
+        items: result.items.map((w) => ({ id: w.id, term: w.term, translation: w.translation })),
+      });
     }
 
     const bulk = ctx.session.bulkDelete;
@@ -361,12 +373,7 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
       return;
     }
 
-    const user = await ensureUser(ctx, services);
-    if (!user) {
-      await ctx.answerCallbackQuery();
-      return;
-    }
-
+    // Тап меняет только выбор в сессии — юзер тут не нужен, в БД не ходим.
     const selected = new Set(state.selected);
     if (selected.has(wordId)) {
       selected.delete(wordId);
@@ -375,9 +382,21 @@ export function registerWordsCommand(bot: Bot<BotContext>, services: AppServices
     }
     ctx.session.bulkDelete = { step: "selecting", selected: [...selected] };
 
-    try {
-      await ctx.answerCallbackQuery();
+    await ctx.answerCallbackQuery();
+
+    // Слова на странице не изменились — перерисовываем галочки из кеша страницы,
+    // без повторного запроса списка. Кеша нет только после рестарта бота — тогда фолбэк.
+    const cached = new SessionCache(ctx.session).getPage(ctx.session.wordsPage);
+    if (!cached) {
       await showList(ctx, ctx.session.wordsPage, true);
+      return;
+    }
+
+    try {
+      await ctx.editMessageText(formatWordsSelectPage(cached, selected.size), {
+        parse_mode: HTML,
+        reply_markup: wordsSelectKeyboard(cached, selected),
+      });
     } catch (error) {
       if (!isMessageNotModified(error)) {
         await ctx.reply(formatAppError(error));

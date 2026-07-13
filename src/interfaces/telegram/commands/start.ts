@@ -4,6 +4,7 @@ import type {
   BotContext,
   SessionUser,
 } from "../../../infrastructure/telegram/context.js";
+import { SessionCache } from "../../../infrastructure/telegram/sessionCache.js";
 import { methodologyLabel } from "../../../domain/enums/Methodology.js";
 import { AppError } from "../../../shared/errors/AppError.js";
 
@@ -70,14 +71,11 @@ export async function ensureUser(
   const username = from.username ?? null;
   const firstName = from.first_name ?? null;
 
+  const cache = new SessionCache(ctx.session);
+
   // Кеш-хит: тот же пользователь, username/имя не менялись — в базу не ходим.
-  const cached = ctx.session.cachedUser;
-  if (
-    cached &&
-    cached.telegramId === from.id &&
-    cached.username === username &&
-    cached.firstName === firstName
-  ) {
+  const cached = cache.getUser(from.id, username, firstName);
+  if (cached) {
     return cached;
   }
 
@@ -89,7 +87,7 @@ export async function ensureUser(
     username: user.username,
     firstName: user.firstName,
   };
-  ctx.session.cachedUser = sessionUser;
+  cache.setUser(sessionUser);
   return sessionUser;
 }
 
