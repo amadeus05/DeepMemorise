@@ -12,4 +12,10 @@ export const env = {
   telegramBotToken: required("TELEGRAM_BOT_TOKEN"),
   databaseUrl: required("DATABASE_URL"),
   dbCaCert: process.env.DB_CA_CERT ?? "certs/ca.pem",
+  // ИИ опционален: нет ключа -> фича просто выключена (кнопка не показывается).
+  groqApiKey: process.env.GROQ_API_KEY ?? null,
+  groqModel: process.env.GROQ_MODEL ?? "llama-3.3-70b-versatile",
+  // Запасной провайдер за тем же портом (в РФ/UA free tier недоступен).
+  geminiApiKey: process.env.GEMINI_API_KEY ?? null,
+  geminiModel: process.env.GEMINI_MODEL ?? "gemini-2.0-flash",
 };
